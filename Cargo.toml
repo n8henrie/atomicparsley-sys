@@ -1,0 +1,16 @@
+[package]
+name = "atomicparsley-sys"
+version = "0.1.0"
+authors = ["Nathan Henrie <nate@n8henrie.com>"]
+readme = "README.md"
+license = "MIT"
+edition = "2018"
+links = "atomicparsley"
+repository = "https://github.com/n8henrie/atomicparsley-sys"
+description = "Rust bindings for atomicparsley"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.59"
+cc = { version = "1.0", features = ["parallel"] }
