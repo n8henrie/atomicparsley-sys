@@ -1,6 +1,10 @@
+use chrono::prelude::*;
+use git2::{Diff, Repository, RepositoryState};
 use std::{env, path::PathBuf};
 
-fn main() {
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=wrapper.h");
     let src = [
         "vendor/src/CDtoc.cpp",
@@ -16,13 +20,75 @@ fn main() {
         "vendor/src/util.cpp",
         "vendor/src/uuid.cpp",
     ];
+    let repo = Repository::open("./vendor")
+        .expect("Unable to open repo from ./vendor");
+    let commit = repo.head()?.peel_to_commit()?;
+    let hash = commit.id().to_string();
+    let timestamp = {
+        let time = commit.time();
+        time.seconds()
+            - time.offset_minutes() as i64 * 60 * {
+                match time.sign() {
+                    '-' => -1,
+                    '+' => 1,
+                    s => panic!("sign: {}", s),
+                }
+            }
+    };
+
+    let naive_datetime = NaiveDateTime::from_timestamp(timestamp, 0);
+    let utc_datetime: DateTime<Utc> = DateTime::from_utc(naive_datetime, Utc);
+    let formatted_timestamp = utc_datetime.format("%Y%m%d.%H%M%S.0");
+
+    let patch = r#"
+diff --git a/src/main.cpp b/src/main.cpp
+index 002fa32..5c06fcc 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -4449,7 +4449,7 @@ int wmain(int argc, wchar_t *arguments[]) {
+ 
+ #ifdef __MINGW32__
+ 
+-int main() {
++int mingw_main() {
+   int argc;
+   wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+   return wmain(argc, argv);
+@@ -4459,7 +4459,7 @@ int main() {
+ 
+ #else // defined __CYGWIN__
+ 
+-int main(int argc, char *argv[]) {
++int cygwin_main(int argc, char *argv[]) {
+   size_t name_len = strlen(argv[0]);
+   if (name_len >= 5 && (strcmp(argv[0] + (name_len - 5), "-utf8") == 0 ||
+                         strcmp(argv[0] + (name_len - 5), "-UTF8") == 0)) {
+@@ -4474,7 +4474,7 @@ int main(int argc, char *argv[]) {
+ 
+ #else
+ 
+-int main(int argc, char *argv[]) { return real_main(argc, argv); }
++int other_main(int argc, char *argv[]) { return real_main(argc, argv); }
+ 
+ #endif
+ 
+"#;
+
+    let diff_from_patch = Diff::from_buffer(patch.as_bytes())?;
+
+    if let RepositoryState::Clean = repo.state() {
+        repo.apply(&diff_from_patch, git2::ApplyLocation::WorkDir, None)?;
+    };
 
     cc::Build::new()
         .cpp(true)
         .flag("-Wno-everything")
         .files(src.iter())
-        .define("PACKAGE_VERSION", "\"20211003.181952.0\"")
-        .define("BUILD_INFO", "\"90ad66d789bf55aa3738e3d3f7e21436ac04b59c\"")
+        .define(
+            "PACKAGE_VERSION",
+            format!("\"{}\"", formatted_timestamp).as_ref(),
+        )
+        .define("BUILD_INFO", format!("\"{}\"", hash).as_ref())
         .compile("atomicparsley");
 
     let bindings = bindgen::Builder::default()
@@ -44,4 +110,5 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=Cocoa");
         println!("cargo:rustc-link-lib=framework=IOKit");
     };
+    Ok(())
 }
