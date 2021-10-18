@@ -5,8 +5,11 @@ master: [![master branch build status](https://github.com/n8henrie/atomicparsley
 
 Rust bindings for atomicparsley
 
-- Free software: MIT (with respect to my code)
+## License
+
 - atomicparsley is available under [GPLv2](https://github.com/wez/atomicparsley/blob/90ad66d789bf55aa3738e3d3f7e21436ac04b59c/COPYING)
+- My contributions are MIT licensed
+
 ## Features
 
 - TODO
